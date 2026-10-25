@@ -47,8 +47,9 @@ book.addEventListener('wheel', event => {
 }, { passive: false });
 
 async function start() {
-  const [json, archive] = await Promise.all([
+  const [json, modelSource, archive] = await Promise.all([
     fetch('./Page.json').then(response => { if (!response.ok) throw new Error('Не удалось открыть JSON макета.'); return response.json(); }),
+    fetch('./content.json').then(response => { if (!response.ok) throw new Error('Не удалось открыть текст Google Doc.'); return response.json(); }),
     new WordArchive('./Юре Ладно.docx').open(),
   ]);
   const design = readDesign(json);
@@ -64,7 +65,7 @@ async function start() {
       }
     }
   } catch { /* First visit or unavailable local storage: use the Figma values. */ }
-  const model = prepareTypography(addMarginalia(await readWord(archive)));
+  const model = prepareTypography(addMarginalia(modelSource));
   const loadImage = imageLoader(archive);
   applyDesign(design, settings);
   await Promise.all([

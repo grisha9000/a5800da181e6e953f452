@@ -1,4 +1,4 @@
-// The DOCX remains the source. Images are read individually, when visible.
+// The archived DOCX supplies images. Text comes from the Google Doc snapshot.
 // Range requests avoid unpacking or downloading all photographs at startup.
 import Hypher from './hypher.js';
 import russianPatterns from './ru-patterns.js';
@@ -96,7 +96,12 @@ export function prepareTypography(model) {
   );
   return {
     ...model,
-    blocks: model.blocks.map(block => block.kind === 'paragraph' ? { ...block, text: block.verse ? nonbreaking(block.text) : hyphenate(block.text) } : block),
+    blocks: model.blocks.map(block => {
+      if (block.kind !== 'paragraph') return block;
+      const format = block.verse ? nonbreaking : hyphenate;
+      const runs = (block.runs || [{ text: block.text, italic: false }]).map(run => ({ ...run, text: format(run.text) }));
+      return { ...block, runs, text: runs.map(run => run.text).join('') };
+    }),
     marginalia: model.marginalia.map(note => ({ ...note, phrase: hyphenate(note.phrase) })),
   };
 }

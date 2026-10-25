@@ -119,6 +119,7 @@ body { margin: 0; background: var(--viewer-background); }
 .body-text.continuation, .body-text.opening, .body-text.verse { text-indent: 0; }
 .body-text.separator { text-indent: 0; text-align: center; }
 .body-text.verse { hyphens: none; -webkit-hyphens: none; text-wrap: wrap; }
+.body-text em { font-style: italic; font-synthesis: style; }
 .caption-text {
   font-family: var(--caption-family);
   font-size: var(--caption-size);

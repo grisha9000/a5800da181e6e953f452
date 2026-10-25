@@ -7,12 +7,38 @@ function place(element, x, y, width, height) {
   return element;
 }
 
-function paragraph(block, continued = false) {
+function paragraph(block, continued = false, text = block.text, offset = 0) {
   const element = document.createElement('p');
   element.className = `body-text${continued ? ' continuation' : ''}${block.opening && !continued ? ' opening' : ''}${block.verse ? ' verse' : ''}${block.separator ? ' separator' : ''}`;
-  element.textContent = block.text;
+  if (!block.runs) element.textContent = text;
+  else {
+    let position = 0;
+    for (const run of block.runs) {
+      const from = Math.max(0, offset - position);
+      const to = Math.min(run.text.length, offset + text.length - position);
+      if (from < to) {
+        const content = run.text.slice(from, to);
+        if (run.italic) {
+          const emphasis = document.createElement('em');
+          emphasis.textContent = content;
+          element.append(emphasis);
+        } else element.append(document.createTextNode(content));
+      }
+      position += run.text.length;
+    }
+  }
   element.dataset.source = block.id;
   return element;
+}
+
+function textPoint(element, offset) {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (offset <= node.length) return [node, offset];
+    offset -= node.length;
+  }
+  return [element, element.childNodes.length];
 }
 
 function baseline(className, host) {
@@ -83,28 +109,28 @@ export async function paginate(model, design, settings, host, cancelled) {
   };
 
   const bottom = () => page.layout.body.y + page.layout.body.height;
-  const measure = (block, text, continued) => {
-    const element = paragraph({ ...block, text }, continued);
+  const measure = (block, text, continued, offset) => {
+    const element = paragraph(block, continued, text, offset);
     element.style.width = `${page.layout.body.width}px`;
     host.replaceChildren(element);
     return Math.max(1, Math.round(element.getBoundingClientRect().height / step));
   };
-  const appendText = (block, text, continued, lines) => {
-    const element = paragraph({ ...block, text }, continued);
+  const appendText = (block, text, continued, lines, offset) => {
+    const element = paragraph(block, continued, text, offset);
     place(element, page.layout.body.x, cursor, page.layout.body.width);
     page.element.append(element);
     for (const note of notesByAnchor.get(block.id) || []) {
       const index = text.indexOf(note.phrase);
       if (index < 0) continue;
-      const sample = paragraph({ ...block, text }, continued);
+      const sample = paragraph(block, continued, text, offset);
       sample.style.width = `${page.layout.body.width}px`;
       host.replaceChildren(sample);
       const line = document.createRange();
-      line.setStart(sample.firstChild, index);
-      line.setEnd(sample.firstChild, index + note.phrase.length);
+      line.setStart(...textPoint(sample, index));
+      line.setEnd(...textPoint(sample, index + note.phrase.length));
       const firstLine = document.createRange();
-      firstLine.setStart(sample.firstChild, 0);
-      firstLine.setEnd(sample.firstChild, 1);
+      firstLine.setStart(...textPoint(sample, 0));
+      firstLine.setEnd(...textPoint(sample, 1));
       const lineIndex = Math.round((line.getClientRects()[0].top - firstLine.getClientRects()[0].top) / step);
       positionedNotes.push({ note, page, top: cursor + lineIndex * step + bodyBaseline - captionBaseline });
     }
@@ -175,13 +201,14 @@ export async function paginate(model, design, settings, host, cancelled) {
     const textBlock = openingParagraph ? { ...block, opening: true } : block;
     openingParagraph = false;
     let text = block.text;
+    let offset = 0;
     let continued = false;
     while (text.length) {
       const available = Math.floor((bottom() - cursor + 0.01) / step);
       if (available < 1) { start(); continue; }
-      const lines = measure(textBlock, text, continued);
+      const lines = measure(textBlock, text, continued, offset);
       if (lines <= available) {
-        appendText(textBlock, text, continued, lines);
+        appendText(textBlock, text, continued, lines, offset);
         break;
       }
       if (available < 2 && page.bodyLines) { start(); continue; }
@@ -197,25 +224,32 @@ export async function paginate(model, design, settings, host, cancelled) {
         const middle = Math.floor((low + high) / 2);
         const position = boundaries[middle];
         const candidate = text.slice(0, position).trimEnd();
-        const count = measure(textBlock, candidate, continued);
+        const count = measure(textBlock, candidate, continued, offset);
         if (count <= available) { best = position; bestLines = count; low = middle + 1; }
         else high = middle - 1;
       }
       // Keep at least two lines of the paragraph on each side of a page break.
       let boundary = boundaries.indexOf(best);
-      while (boundary >= 0 && measure(textBlock, text.slice(best).trimStart(), true) < 2) {
+      const remainingLines = position => {
+        const tail = text.slice(position);
+        const trimmed = tail.trimStart();
+        return measure(textBlock, trimmed, true, offset + position + tail.length - trimmed.length);
+      };
+      while (boundary >= 0 && remainingLines(best) < 2) {
         best = boundaries[--boundary] || 0;
-        if (best) bestLines = measure(textBlock, text.slice(0, best).trimEnd(), continued);
+        if (best) bestLines = measure(textBlock, text.slice(0, best).trimEnd(), continued, offset);
       }
       if ((!best || bestLines < 2) && page.bodyLines) { start(); continue; }
       if (!best) {
         if (page.bodyLines || page.images.length) { start(); continue; }
         // A single unusually long word still has to make progress.
         best = boundaries[0] || text.length;
-        bestLines = measure(textBlock, text.slice(0, best).trimEnd(), continued);
+        bestLines = measure(textBlock, text.slice(0, best).trimEnd(), continued, offset);
       }
-      appendText(textBlock, text.slice(0, best).trimEnd(), continued, bestLines);
-      text = text.slice(best).trimStart();
+      appendText(textBlock, text.slice(0, best).trimEnd(), continued, bestLines, offset);
+      const remainder = text.slice(best);
+      text = remainder.trimStart();
+      offset += best + remainder.length - text.length;
       continued = true;
       if (text) start();
     }

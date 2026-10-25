@@ -1,0 +1,27 @@
+name: Update book text from Google Doc
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the public Google Doc
+        run: curl --fail --location --retry 3 --output "$RUNNER_TEMP/book.docx" 'https://docs.google.com/document/d/1rfjYaZ-OtbNZ0tjB7AoF4Av-HtXZpN1fpoJ8P3YnYfU/export?format=docx'
+      - name: Extract text, paragraph styles and italics
+        run: python3 sync_google_doc.py "$RUNNER_TEMP/book.docx" 'Юре Ладно.docx' content.json
+      - name: Publish changed text
+        run: |
+          if git diff --quiet -- content.json; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add content.json
+          git commit -m 'Update book text from Google Doc'
+          git push
