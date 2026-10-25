@@ -138,6 +138,8 @@ body { margin: 0; background: var(--viewer-background); }
   color: var(--panel-color);
 }
 #panel {
+  left: 0;
+  right: auto;
   width: var(--panel-width);
   max-height: 100dvh;
   overflow: auto;
