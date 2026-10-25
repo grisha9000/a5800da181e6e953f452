@@ -49,7 +49,7 @@ book.addEventListener('wheel', event => {
 async function start() {
   const [json, modelSource, archive] = await Promise.all([
     fetch('./Page.json').then(response => { if (!response.ok) throw new Error('Не удалось открыть JSON макета.'); return response.json(); }),
-    fetch('./content.json').then(response => { if (!response.ok) throw new Error('Не удалось открыть текст Google Doc.'); return response.json(); }),
+    fetch(`./content.json?fresh=${Date.now()}`, { cache: 'no-store' }).then(response => { if (!response.ok) throw new Error('Не удалось открыть текст Google Doc.'); return response.json(); }),
     new WordArchive('./Юре Ладно.docx').open(),
   ]);
   const design = readDesign(json);
