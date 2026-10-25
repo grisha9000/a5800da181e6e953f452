@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>a5800da181e6e953f452</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main id="book" aria-label="Развороты книги" aria-busy="true"></main>
+    <aside id="panel" aria-label="Настройки книги">
+      <div class="panel-heading">
+        <span>Юрӗ — Ладно</span>
+        <button id="close-panel" type="button" aria-label="Скрыть настройки">×</button>
+      </div>
+      <label class="zoom-label" for="zoom">Масштаб <output id="zoom-value">100%</output></label>
+      <input id="zoom" type="range" min="25" max="200" step="1" value="100">
+      <label class="grid-control"><input id="grid" type="checkbox"> Показать сетку</label>
+      <div id="type-controls"></div>
+      <dl class="statistics">
+        <dt>Страницы</dt><dd id="page-count">—</dd>
+        <dt>Строки текста</dt><dd id="line-count">—</dd>
+      </dl>
+      <button id="reset" type="button">Вернуть значения из Figma</button>
+      <p id="status" role="status">Читаю макет и документ…</p>
+    </aside>
+    <button id="open-panel" type="button" aria-label="Показать настройки" title="Настройки" hidden>а</button>
+    <div id="measurement" aria-hidden="true"></div>
+  </body>
+</html>
