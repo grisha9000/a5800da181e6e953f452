@@ -27,10 +27,12 @@ export class WordArchive {
   }
 
   async open() {
-    const response = await fetch(this.url, { headers: { Range: 'bytes=-65557' } });
+    // file:// previews do not reliably support HTTP byte-range requests.
+    const localFile = new URL(this.url, location.href).protocol === 'file:';
+    const response = await fetch(this.url, localFile ? {} : { headers: { Range: 'bytes=-65557' } });
     if (!response.ok) throw new Error('Не удалось открыть документ Word.');
     const tail = new Uint8Array(await response.arrayBuffer());
-    if (response.status === 200) this.wholeFile = tail;
+    if (localFile || response.status === 200) this.wholeFile = tail;
     const view = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
     let end = tail.length - 22;
     while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--;
