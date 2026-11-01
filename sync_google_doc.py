@@ -79,10 +79,15 @@ def read_doc(export, image_directory):
         heading = style_id in headings or style_id.lower() in {"heading1", "heading 1"}
         indent = properties.find(W + "ind") if properties is not None else None
         verse = indent is not None and int(indent.get(W + "left", "0")) > 0
+        page_break = any(item.get(W + "type") == "page" for item in paragraph.iter(W + "br"))
+        if properties is not None and properties.find(W + "pageBreakBefore") is not None:
+            page_break = True
+        if not started and page_break:
+            started = True
         full_text = "".join(node.text or "" for node in paragraph.iter(W + "t")).strip()
         has_image = paragraph.find(".//" + W + "drawing") is not None
 
-        if not started and heading and len(cover) < 2:
+        if not started and heading:
             cover.append(full_text)
             continue
         if not started:
@@ -142,7 +147,7 @@ def read_doc(export, image_directory):
 
     while blocks and blocks[-1]["kind"] == "space":
         blocks.pop()
-    if len(cover) != 2 or not blocks or blocks[0]["kind"] != "heading":
+    if not cover or not blocks or blocks[0]["kind"] != "heading":
         raise ValueError("Could not identify the title and first chapter heading")
     return {
         "sourceUrl": SOURCE,
