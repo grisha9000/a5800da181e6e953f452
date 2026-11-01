@@ -20,7 +20,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/book-env"
           "$RUNNER_TEMP/book-env/bin/pip" install --quiet Pillow
       - name: Extract text and illustrations
-        run: "$RUNNER_TEMP/book-env/bin/python" sync_google_doc.py "$RUNNER_TEMP/book.docx" content.json book-images
+        run: |
+          "$RUNNER_TEMP/book-env/bin/python" sync_google_doc.py "$RUNNER_TEMP/book.docx" content.json book-images
       - name: Publish changed book content
         run: |
           git add -A -- content.json book-images
