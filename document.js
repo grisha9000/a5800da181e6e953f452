@@ -1,5 +1,5 @@
-// The archived DOCX supplies images. Text comes from the Google Doc snapshot.
-// Range requests avoid unpacking or downloading all photographs at startup.
+// The archived DOCX supplies images until the Google Doc sync publishes them.
+// Range requests avoid unpacking or downloading all archived photographs at startup.
 import Hypher from './hypher.js';
 import russianPatterns from './ru-patterns.js';
 

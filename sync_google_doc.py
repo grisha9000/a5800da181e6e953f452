@@ -1,9 +1,10 @@
-"""Build the book text snapshot from the public Google Doc DOCX export.
+"""Build the book text and illustration files from the Google Doc export."""
 
-The original Word file remains the source for the existing illustrations.
-"""
-
+import hashlib
+import io
 import json
+from pathlib import Path
+import posixpath
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
@@ -16,21 +17,26 @@ A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 WP = "{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}"
 
 
-def image_paths(archive):
-    with zipfile.ZipFile(archive) as source:
-        relationships = {
-            item.get("Id"): item.get("Target")
-            for item in ET.fromstring(source.read("word/_rels/document.xml.rels"))
-        }
-        document = ET.fromstring(source.read("word/document.xml"))
-    paths = []
-    for drawing in document.iter(W + "drawing"):
-        blip = drawing.find(".//" + A + "blip")
-        if blip is not None:
-            target = relationships.get(blip.get(R + "embed"))
-            if target and ".." not in target:
-                paths.append("word/" + target)
-    return paths
+def save_image(target, media, directory):
+    source_path = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join("word", target))
+    if source_path not in media:
+        raise ValueError(f"Illustration is missing from Google Doc export: {source_path}")
+    data = media[source_path]
+    extension = Path(source_path).suffix.lower()
+    if extension not in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as image:
+            converted = image.convert("RGBA" if "A" in image.getbands() or "transparency" in image.info else "RGB")
+            output = io.BytesIO()
+            converted.save(output, format="PNG")
+            data = output.getvalue()
+        extension = ".png"
+    name = f"{hashlib.sha256(data).hexdigest()[:20]}{extension}"
+    destination = directory / name
+    if not destination.exists():
+        destination.write_bytes(data)
+    return f"{directory.name}/{name}"
 
 
 def clean_runs(runs):
@@ -44,10 +50,16 @@ def clean_runs(runs):
     return [run for run in runs if run["text"]]
 
 
-def read_doc(export, paths):
+def read_doc(export, image_directory):
     with zipfile.ZipFile(export) as source:
         document = ET.fromstring(source.read("word/document.xml"))
         styles = ET.fromstring(source.read("word/styles.xml"))
+        relationships = {
+            item.get("Id"): item.get("Target")
+            for item in ET.fromstring(source.read("word/_rels/document.xml.rels"))
+        }
+        media = {name: source.read(name) for name in source.namelist() if name.startswith("word/media/")}
+    image_directory.mkdir(exist_ok=True)
     headings = {
         style.get(W + "styleId")
         for style in styles.iter(W + "style")
@@ -59,7 +71,6 @@ def read_doc(export, paths):
     cover = []
     started = False
     previous_verse = False
-    image_index = 0
 
     for index, paragraph in enumerate(body.findall(W + "p")):
         properties = paragraph.find(W + "pPr")
@@ -113,17 +124,18 @@ def read_doc(export, paths):
                         runs.append({"text": "\n", "italic": italic})
                 elif item.tag == W + "drawing":
                     flush()
-                    if image_index >= len(paths):
-                        raise ValueError("In Google Doc there are more images than in the original archive")
+                    blip = item.find(".//" + A + "blip")
+                    target = relationships.get(blip.get(R + "embed")) if blip is not None else None
+                    if not target:
+                        raise ValueError("An illustration has no image data")
                     extent = item.find(".//" + WP + "extent")
                     if extent is None:
                         raise ValueError("An illustration has no dimensions")
                     blocks.append({
                         "kind": "image", "id": f"p-{index}-{part}",
-                        "path": paths[image_index],
+                        "path": save_image(target, media, image_directory),
                         "width": int(extent.get("cx")), "height": int(extent.get("cy")),
                     })
-                    image_index += 1
                     part += 1
         flush()
         previous_verse = verse
@@ -132,8 +144,6 @@ def read_doc(export, paths):
         blocks.pop()
     if len(cover) != 2 or not blocks or blocks[0]["kind"] != "heading":
         raise ValueError("Could not identify the title and first chapter heading")
-    if image_index != len(paths):
-        raise ValueError(f"Expected {len(paths)} illustrations; Google Doc has {image_index}")
     return {
         "sourceUrl": SOURCE,
         "title": " ".join(cover).strip(),
@@ -143,8 +153,8 @@ def read_doc(export, paths):
 
 
 if __name__ == "__main__":
-    export, archive, output = sys.argv[1:]
-    model = read_doc(export, image_paths(archive))
+    export, output, image_directory = sys.argv[1:]
+    model = read_doc(export, Path(image_directory))
     with open(output, "w", encoding="utf-8") as target:
         json.dump(model, target, ensure_ascii=False, separators=(",", ":"))
         target.write("\n")

@@ -47,11 +47,12 @@ book.addEventListener('wheel', event => {
 }, { passive: false });
 
 async function start() {
-  const [json, modelSource, archive] = await Promise.all([
+  const [json, modelSource] = await Promise.all([
     fetch('./Page.json').then(response => { if (!response.ok) throw new Error('Не удалось открыть JSON макета.'); return response.json(); }),
     fetch(`./content.json?fresh=${Date.now()}`, { cache: 'no-store' }).then(response => { if (!response.ok) throw new Error('Не удалось открыть текст Google Doc.'); return response.json(); }),
-    new WordArchive('./Юре Ладно.docx').open(),
   ]);
+  const archive = modelSource.blocks.some(block => block.kind === 'image' && block.path.startsWith('word/'))
+    ? await new WordArchive('./Юре Ладно.docx').open() : null;
   const design = readDesign(json);
   const defaults = defaultSettings(design);
   let settings = structuredClone(defaults);
@@ -66,7 +67,7 @@ async function start() {
     }
   } catch { /* First visit or unavailable local storage: use the Figma values. */ }
   const model = prepareTypography(addMarginalia(modelSource));
-  const loadImage = imageLoader(archive);
+  const loadImage = archive && imageLoader(archive);
   applyDesign(design, settings);
   await Promise.all([
     document.fonts.load(`${settings.body.size}px "${design.body.fontFamily}"`),
@@ -91,7 +92,8 @@ async function start() {
         if (!entry.isIntersecting) continue;
         observer.unobserve(entry.target);
         const block = images.get(entry.target);
-        loadImage(block).then(url => {
+        const source = block.path.startsWith('word/') ? loadImage(block) : Promise.resolve(block.path);
+        source.then(url => {
           const image = document.createElement('img');
           image.src = url;
           image.alt = 'Иллюстрация из исходного документа';
